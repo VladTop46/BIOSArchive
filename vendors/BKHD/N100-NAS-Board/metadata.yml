@@ -1,0 +1,31 @@
+platform:
+  vendor: BKHD
+  model: N100-NAS-Board
+
+  cpu:
+    vendor: Intel
+    model: N100
+    family: Alder Lake-N
+    stepping: SRMDM
+
+images:
+  - file: dump-01.bin
+    type: full_spi
+    size: 16777216
+    sha256: "6d938c6be1db92bb1c1da85d3c48d8483e7f96ac461b3ccc694598952782aa47"
+
+    source:
+      type: programmer_dump
+      origin: physical_device
+      obtained: 2026-08-19
+
+    nvram:
+      cleared: false
+      method:
+
+    verification:
+      tested: true
+      status: working
+
+    notes:
+      - "Dumped from working device"

@@ -1,0 +1,32 @@
+platform:
+  vendor: OSIO
+  model: BaseLine B150i-001c
+
+  cpu:
+    vendor: Intel
+    model: N100
+    family: Alder Lake-N
+    stepping: SRMDM
+
+images:
+  - file: dump-01.bin
+    type: full_spi
+    size: 16777216
+    sha256: "9114d021d693a70b6a0b077cdc53acea910c74cfcab5c5f10428af48f59d6988"
+
+    source:
+      type: programmer_dump
+      origin: physical_device
+      obtained: 2026-08-15
+
+    nvram:
+      cleared: true
+      method: manual
+
+    verification:
+      tested: true
+      status: working
+
+    notes:
+      - "NVRAM manually cleared before archival."
+      - "Tested on the original platform and confirmed working."
