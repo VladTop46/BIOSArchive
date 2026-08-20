@@ -1,0 +1,31 @@
+platform:
+  vendor: Lenovo
+  model: ideacentre-Stick-300-01IBY
+
+  cpu:
+    vendor: Intel
+    model: Atom Z3735F
+    family: Bay Trail-T
+    stepping: SR1UB
+
+images:
+  - file: dump-01.bin
+    type: full_spi
+    size: 2097152
+    sha256: "69f125f668a49722f6722befc2b79bdb7294b5ecde81fe70d63e28e2b7f521e0"
+
+    source:
+      type: programmer_dump
+      origin: physical_device
+      obtained: 2026-08-20
+
+    nvram:
+      cleared: false
+      method:
+
+    verification:
+      tested: true
+      status: working
+
+    notes:
+      - "Dumped from working device"

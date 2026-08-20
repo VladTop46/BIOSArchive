@@ -2,6 +2,7 @@
 """BIOSArchive Catalog Browser — browse vendor/SoC/CPU hierarchy with full metadata."""
 
 import sys
+import hashlib
 from pathlib import Path
 from collections import defaultdict
 import yaml
@@ -12,7 +13,7 @@ from PyQt6.QtWidgets import (
     QScrollArea, QFrame, QGroupBox, QGridLayout, QPushButton,
     QStatusBar, QSizePolicy, QComboBox, QRadioButton, QButtonGroup,
 )
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QFont, QColor, QBrush
 
 VENDORS_DIR = Path(__file__).resolve().parent.parent.parent / "vendors"
@@ -114,6 +115,29 @@ def filter_entries(entries: list[dict],
 
 
 # ---------------------------------------------------------------------------
+# Background SHA-256 worker
+# ---------------------------------------------------------------------------
+
+class HashWorker(QThread):
+    done   = pyqtSignal(str)   # hex digest
+    failed = pyqtSignal(str)   # error message
+
+    def __init__(self, path: Path):
+        super().__init__()
+        self._path = path
+
+    def run(self):
+        try:
+            h = hashlib.sha256()
+            with open(self._path, "rb") as f:
+                while chunk := f.read(1 << 20):   # 1 MB chunks
+                    h.update(chunk)
+            self.done.emit(h.hexdigest())
+        except Exception as exc:
+            self.failed.emit(str(exc))
+
+
+# ---------------------------------------------------------------------------
 # Detail panel
 # ---------------------------------------------------------------------------
 
@@ -154,8 +178,17 @@ class DetailPanel(QScrollArea):
         self._vbox.setContentsMargins(20, 20, 20, 20)
         self._vbox.setSpacing(12)
         self.setWidget(self._inner)
+        self._hash_worker: HashWorker | None = None
+        self._verify_btn: QPushButton | None = None
+        self._verify_lbl: QLabel | None = None
 
     def _clear(self):
+        if self._hash_worker and self._hash_worker.isRunning():
+            self._hash_worker.quit()
+            self._hash_worker.wait()
+        self._hash_worker = None
+        self._verify_btn  = None
+        self._verify_lbl  = None
         while self._vbox.count():
             item = self._vbox.takeAt(0)
             if w := item.widget():
@@ -200,6 +233,40 @@ class DetailPanel(QScrollArea):
         hbox.addWidget(copy_btn, 0, Qt.AlignmentFlag.AlignTop)
         grid.addWidget(lbl,       row, 0, Qt.AlignmentFlag.AlignTop)
         grid.addWidget(container, row, 1)
+
+    # ---- hash verification ----
+
+    def _start_verify(self, file_path: Path, expected: str):
+        self._verify_btn.setEnabled(False)
+        self._verify_lbl.setText("Computing…")
+        self._verify_lbl.setStyleSheet("color: #888; font-weight: normal;")
+
+        self._hash_worker = HashWorker(file_path)
+        self._hash_worker.done.connect(
+            lambda digest, ex=expected: self._on_hash_done(digest, ex)
+        )
+        self._hash_worker.failed.connect(self._on_hash_error)
+        self._hash_worker.start()
+
+    def _on_hash_done(self, digest: str, expected: str):
+        if self._verify_btn:
+            self._verify_btn.setEnabled(True)
+        if self._verify_lbl is None:
+            return
+        if digest.lower() == expected.lower():
+            self._verify_lbl.setText("✓ Match")
+            self._verify_lbl.setStyleSheet("color: #27ae60; font-weight: bold;")
+        else:
+            self._verify_lbl.setText("✗ Mismatch")
+            self._verify_lbl.setStyleSheet("color: #e74c3c; font-weight: bold;")
+            self._verify_lbl.setToolTip(f"Expected: {expected}\nGot:      {digest}")
+
+    def _on_hash_error(self, msg: str):
+        if self._verify_btn:
+            self._verify_btn.setEnabled(True)
+        if self._verify_lbl:
+            self._verify_lbl.setText(f"Error: {msg}")
+            self._verify_lbl.setStyleSheet("color: #e67e22; font-weight: normal;")
 
     # ---- public view methods ----
 
@@ -354,6 +421,31 @@ class DetailPanel(QScrollArea):
         if img.get("sha256"):
             self._sha_row(box.layout(), rows.count, str(img["sha256"]))
         self._vbox.addWidget(box)
+
+        # Integrity verification
+        if img.get("sha256"):
+            file_path = (entry.get("_path") or Path()) / (img.get("file") or "")
+            expected  = str(img["sha256"])
+            box_i = QGroupBox("Integrity")
+            vi = QVBoxLayout(box_i)
+            row_w = QWidget()
+            rh = QHBoxLayout(row_w)
+            rh.setContentsMargins(0, 0, 0, 0)
+            rh.setSpacing(8)
+            self._verify_btn = QPushButton("Verify SHA-256")
+            self._verify_lbl = QLabel("")
+            self._verify_lbl.setFont(QFont(None, -1, QFont.Weight.Bold))
+            if not file_path.exists():
+                self._verify_btn.setEnabled(False)
+                self._verify_btn.setToolTip(f"File not found: {file_path}")
+            else:
+                self._verify_btn.clicked.connect(
+                    lambda _=False, fp=file_path, ex=expected: self._start_verify(fp, ex)
+                )
+            rh.addWidget(self._verify_btn)
+            rh.addWidget(self._verify_lbl, 1)
+            vi.addWidget(row_w)
+            self._vbox.addWidget(box_i)
 
         src = img.get("source") or {}
         if any(src.get(k) for k in ("type", "origin", "obtained")):
