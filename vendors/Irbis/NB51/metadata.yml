@@ -1,0 +1,31 @@
+platform:
+  vendor: Irbis
+  model: NB51
+
+  cpu:
+    vendor: Intel
+    model: Atom Z3735F
+    family: Bay Trail-T
+    stepping: SR1UB
+
+images:
+  - file: dump-01.bin
+    type: full_spi
+    size: 8388608
+    sha256: "7f9292ca493f9020636f1049fdeb8f020694a7863bb0e0c3e5bde5e098b29ce7"
+
+    source:
+      type: programmer_dump
+      origin: physical_device
+      obtained: 2026-09-30
+
+    nvram:
+      cleared: false
+      method:
+
+    verification:
+      tested: false
+      status: working
+
+    notes:
+      - "Dumped from a some time ago work device"
