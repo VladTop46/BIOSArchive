@@ -1,0 +1,78 @@
+
+platform:
+  vendor: Valve
+  model: Steam Deck
+  revision: C
+
+  cpu:
+    vendor: AMD
+    model: Aerith
+    family: Van Gogh
+    stepping: unknown
+    part_number: "100-000000405"
+
+images:
+  - file: rev-c_dump-1.bin
+    type: full_spi
+    size: 16777216
+    sha256: "3e3de78c4355c836a5f2f7855dc24f9ce531a472fe2b0680b43e7d0a60a3574b"
+
+    source:
+      type: programmer_dump
+      origin: physical_device
+      obtained: 2026-10-11
+
+    nvram:
+      cleared: partially
+      method: manual
+      details:
+        - "Board and system serial numbers were manually redacted."
+        - "All occurrences were replaced with 12 ASCII '0' characters (0x30)."
+        - "Only existing serial number bytes were modified."
+        - "Record headers, file size and offsets were preserved."
+        - "84 bytes changed across 8 serial number occurrences."
+        - "No other bytes were modified, verified by binary comparison."
+
+      redactions:
+        replacement: "000000000000"
+        encoding: ASCII
+        total_occurrences: 8
+        modified_bytes: 84
+        regions:
+          - range: "0x6A4009-0x6A4014"
+            field: board_serial
+            modified_bytes: 10
+          - range: "0x6A401A-0x6A4025"
+            field: board_serial
+            modified_bytes: 10
+          - range: "0x6A402B-0x6A4036"
+            field: system_serial
+            modified_bytes: 11
+          - range: "0x6A403C-0x6A4047"
+            field: system_serial
+            modified_bytes: 11
+          - range: "0x6A404D-0x6A4058"
+            field: board_serial
+            modified_bytes: 10
+          - range: "0x6A405E-0x6A4069"
+            field: board_serial
+            modified_bytes: 10
+            record_status: obsolete
+          - range: "0x6A406F-0x6A407A"
+            field: system_serial
+            modified_bytes: 11
+          - range: "0x6A4080-0x6A408B"
+            field: system_serial
+            modified_bytes: 11
+            record_status: obsolete
+
+    verification:
+      tested_original: true
+      tested_cleared: false
+      status: working
+
+    notes:
+      - "Dumped from a working Steam Deck LCD (revision C)."
+      - "AMD Aerith (Van Gogh), Zen 2, 4 cores / 8 threads."
+      - "Board and system serial numbers have been manually redacted."
+      - "All other firmware data was preserved unchanged."

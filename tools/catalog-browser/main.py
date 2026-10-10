@@ -35,7 +35,7 @@ ALL = "All"
 # ---------------------------------------------------------------------------
 
 def fmt_size(b: int | None) -> str:
-    if b is None:
+    if b is None or not isinstance(b, int):
         return ""
     for unit in ("B", "KB", "MB", "GB"):
         if b < 1024:
@@ -47,7 +47,8 @@ def fmt_size(b: int | None) -> str:
 def img_status(img: dict) -> tuple[str, str]:
     """Return (label, hex_color) for an image's verification status."""
     v = img.get("verification") or {}
-    status = v.get("status") or ("tested" if v.get("tested") else "unknown")
+    tested_any = v.get("tested") or v.get("tested_original")
+    status = v.get("status") or ("tested" if tested_any else "unknown")
     colors = {"working": "#27ae60", "broken": "#e74c3c", "tested": "#2980b9"}
     return status, colors.get(status, "#7f8c8d")
 
@@ -364,18 +365,20 @@ class DetailPanel(QScrollArea):
         self._vbox.addWidget(self._sep())
 
         box, rows = self._group("Platform")
-        rows.add("Vendor", plat.get("vendor"))
-        rows.add("Model",  plat.get("model"))
+        rows.add("Vendor",   plat.get("vendor"))
+        rows.add("Model",    plat.get("model"))
+        rows.add("Revision", plat.get("revision"))
         if path:
             rows.add("Path", str(path))
         self._vbox.addWidget(box)
 
-        if any(cpu.get(k) for k in ("vendor", "model", "family", "stepping")):
+        if any(cpu.get(k) for k in ("vendor", "model", "family", "stepping", "part_number")):
             box2, rows2 = self._group("CPU / SoC")
             rows2.add("Vendor",   cpu.get("vendor"))
             rows2.add("Model",    cpu.get("model"))
             rows2.add("Family",   cpu.get("family"))
             rows2.add("Stepping", cpu.get("stepping"))
+            rows2.add("Part №",   cpu.get("part_number"))
             self._vbox.addWidget(box2)
 
         images = entry.get("images") or []
@@ -410,7 +413,10 @@ class DetailPanel(QScrollArea):
             return
         img = images[img_index]
 
-        subtitle = f"{plat.get('model', '?')}  /  {img.get('file', '?')}"
+        _model = plat.get("model", "?")
+        if rev := plat.get("revision"):
+            _model = f"{_model} rev. {rev}"
+        subtitle = f"{_model}  /  {img.get('file', '?')}"
         self._vbox.addWidget(self._heading(subtitle, size=16))
         self._vbox.addWidget(self._sep())
 
@@ -455,25 +461,57 @@ class DetailPanel(QScrollArea):
             rows2.add("Obtained", str(src["obtained"]) if src.get("obtained") else None)
             self._vbox.addWidget(box2)
 
-        nvram   = img.get("nvram") or {}
-        cleared = nvram.get("cleared")
-        method  = nvram.get("method")
-        if cleared is not None or method:
+        nvram      = img.get("nvram") or {}
+        cleared    = nvram.get("cleared")
+        method     = nvram.get("method")
+        details    = nvram.get("details") or []
+        redactions = nvram.get("redactions") or {}
+
+        if cleared is not None or method or details or redactions:
             box3, rows3 = self._group("NVRAM")
             if cleared is not None:
-                rows3.add("Cleared", "Yes" if cleared else "No",
-                          color="#e67e22" if cleared else "#27ae60")
+                if cleared is True:
+                    cleared_lbl, cleared_color = "Yes", "#e67e22"
+                elif cleared is False:
+                    cleared_lbl, cleared_color = "No", "#27ae60"
+                else:
+                    cleared_lbl, cleared_color = str(cleared).capitalize(), "#e67e22"
+                rows3.add("Cleared", cleared_lbl, color=cleared_color)
             rows3.add("Method", method)
+            if details:
+                rows3.add("Details", "\n".join(f"• {d}" for d in details))
+            if redactions:
+                rows3.add("Occurrences",   str(redactions.get("total_occurrences", "")))
+                rows3.add("Bytes changed", str(redactions.get("modified_bytes", "")))
+                rows3.add("Replacement",   redactions.get("replacement"))
+                regions = redactions.get("regions") or []
+                if regions:
+                    lines = []
+                    for reg in regions:
+                        tag = f"  [{reg['record_status']}]" if reg.get("record_status") else ""
+                        lines.append(
+                            f"{reg.get('range', '?')}  {reg.get('field', '?')}"
+                            f"  ({reg.get('modified_bytes', '?')} B){tag}"
+                        )
+                    rows3.add("Regions", "\n".join(lines), mono=True)
             self._vbox.addWidget(box3)
 
-        ver    = img.get("verification") or {}
-        tested = ver.get("tested")
-        status = ver.get("status")
-        if tested is not None or status:
+        ver             = img.get("verification") or {}
+        tested          = ver.get("tested")
+        tested_original = ver.get("tested_original")
+        tested_cleared  = ver.get("tested_cleared")
+        status          = ver.get("status")
+        if any(x is not None for x in (tested, tested_original, tested_cleared)) or status:
             box4, rows4 = self._group("Verification")
             if tested is not None:
                 rows4.add("Tested", "Yes" if tested else "No",
                           color="#27ae60" if tested else "#7f8c8d")
+            if tested_original is not None:
+                rows4.add("Tested (original)", "Yes" if tested_original else "No",
+                          color="#27ae60" if tested_original else "#7f8c8d")
+            if tested_cleared is not None:
+                rows4.add("Tested (cleared)", "Yes" if tested_cleared else "No",
+                          color="#27ae60" if tested_cleared else "#7f8c8d")
             if status:
                 s_color = {"working": "#27ae60", "broken": "#e74c3c"}.get(status)
                 rows4.add("Status", status, color=s_color)
